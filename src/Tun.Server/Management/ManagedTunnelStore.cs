@@ -213,7 +213,14 @@ public sealed class ManagedTunnelStore
             throw new ArgumentException("TunnelId is required.");
         }
 
-        if (request.TunnelId.Any(ch => !(char.IsLetterOrDigit(ch) || ch is '-' or '_' or '.')))
+        var tunnelId = request.TunnelId.Trim();
+
+        if (TunnelServerOptions.ReservedSubdomains.Contains(tunnelId))
+        {
+            throw new ArgumentException($"TunnelId '{tunnelId}' is reserved and cannot be used.");
+        }
+
+        if (tunnelId.Any(ch => !(char.IsLetterOrDigit(ch) || ch is '-' or '_' or '.')))
         {
             throw new ArgumentException("TunnelId can contain only letters, digits, '-', '_' and '.'.");
         }

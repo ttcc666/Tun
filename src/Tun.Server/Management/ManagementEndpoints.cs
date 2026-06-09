@@ -22,11 +22,28 @@ public static class ManagementEndpoints
                 return Results.Unauthorized();
             }
 
+            var publicOrigin = GetPublicOrigin(context);
+            var baseDomain = options.Value.BaseDomain;
+            var scheme = context.Request.Scheme;
+
+            var configured = store.GetAll().Select(tunnel => new
+            {
+                tunnel.TunnelId,
+                tunnel.ClientId,
+                tunnel.LocalUrl,
+                tunnel.Enabled,
+                tunnel.Description,
+                tunnel.CreatedAt,
+                tunnel.UpdatedAt,
+                publicUrl = $"{scheme}://{tunnel.TunnelId}.{baseDomain}"
+            }).ToArray();
+
             return Results.Ok(new
             {
-                publicOrigin = GetPublicOrigin(context),
+                publicOrigin,
+                baseDomain,
                 forwardedHeadersEnabled = options.Value.ForwardedHeaders.Enabled,
-                configured = store.GetAll(),
+                configured,
                 online = registry.GetStatuses()
             });
         });

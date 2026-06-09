@@ -161,6 +161,12 @@ function showToast(message) {
 }
 
 function buildTunnelUrl(tunnelId) {
+  if (state.baseDomain) {
+    const scheme = window.location.protocol;
+    return `${scheme}//${encodeURIComponent(tunnelId)}.${state.baseDomain}/`;
+  }
+
+  // Fallback
   const origin = String(state.publicOrigin || window.location.origin).replace(/\/$/, "");
   return `${origin}/t/${encodeURIComponent(tunnelId)}/`;
 }

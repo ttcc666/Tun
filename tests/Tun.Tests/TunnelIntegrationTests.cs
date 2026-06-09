@@ -34,7 +34,8 @@ public sealed class TunnelIntegrationTests
 
         await WaitForAsync(async () => (await publicClient.GetStringAsync("/api/tunnels")).Contains("demo", StringComparison.OrdinalIgnoreCase));
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/t/demo/echo?x=1");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/echo?x=1");
+        request.Headers.Host = "demo.localhost";
         request.Headers.Add("X-Test", "abc");
 
         using var response = await publicClient.SendAsync(request);
@@ -56,7 +57,13 @@ public sealed class TunnelIntegrationTests
 
         await WaitForAsync(async () => (await publicClient.GetStringAsync("/api/tunnels")).Contains("demo", StringComparison.OrdinalIgnoreCase));
 
-        using var response = await publicClient.PostAsync("/t/demo/upload?mode=raw", new StringContent(payload));
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/upload?mode=raw")
+        {
+            Content = new StringContent(payload)
+        };
+        request.Headers.Host = "demo.localhost";
+
+        using var response = await publicClient.SendAsync(request);
         var body = await response.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -64,7 +71,7 @@ public sealed class TunnelIntegrationTests
     }
 
     [Fact]
-    public async Task Tunnel_RewritesRootRelativeAssetUrlsInHtml()
+    public async Task Tunnel_PreservesResponseHeaders()
     {
         await using var localApp = await StartLocalHtmlAppAsync();
         await using var factory = new WebApplicationFactory<Program>();
@@ -73,23 +80,25 @@ public sealed class TunnelIntegrationTests
 
         await WaitForAsync(async () => (await publicClient.GetStringAsync("/api/tunnels")).Contains("demo", StringComparison.OrdinalIgnoreCase));
 
-        using var response = await publicClient.GetAsync("/t/demo/");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/");
+        request.Headers.Host = "demo.localhost";
+
+        using var response = await publicClient.SendAsync(request);
         var html = await response.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("href=\"/t/demo/app/assets/index.css?tun=demo\"", html);
-        Assert.Contains("src=\"/t/demo/app/assets/index.js?tun=demo\"", html);
-        Assert.DoesNotContain("href=\"/app/assets/index.css\"", html);
-        Assert.False(response.Headers.Contains("ETag"));
-        Assert.False(response.Content.Headers.Contains("Content-Length"));
-        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains("<link rel=\"stylesheet\" href=\"/app/assets/index.css\">", html);
+        Assert.Contains("<script type=\"module\" src=\"/app/assets/index.js\"></script>", html);
+        Assert.True(response.Headers.Contains("ETag"));
+        Assert.True(response.Content.Headers.Contains("Content-Length"));
 
-        using var assetResponse = await publicClient.GetAsync("/t/demo/app/assets/index.css");
+        using var assetRequest = new HttpRequestMessage(HttpMethod.Get, "/app/assets/index.css");
+        assetRequest.Headers.Host = "demo.localhost";
+        using var assetResponse = await publicClient.SendAsync(assetRequest);
         var css = await assetResponse.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.OK, assetResponse.StatusCode);
         Assert.Contains("color", css);
-        Assert.Equal("no-store", assetResponse.Headers.CacheControl?.ToString());
     }
 
     [Fact]
@@ -98,7 +107,10 @@ public sealed class TunnelIntegrationTests
         await using var factory = new WebApplicationFactory<Program>();
         var publicClient = factory.CreateClient();
 
-        using var response = await publicClient.GetAsync("/t/missing/health");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/health");
+        request.Headers.Host = "missing.localhost";
+
+        using var response = await publicClient.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }

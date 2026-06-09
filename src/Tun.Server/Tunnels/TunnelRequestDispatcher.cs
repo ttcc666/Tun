@@ -31,7 +31,7 @@ public sealed class TunnelRequestDispatcher(
         try
         {
             await SendRequestAsync(context, tunnel, requestId, path, timeout.Token);
-            await RelayResponseAsync(context, tunnelId, requestId, responses, timeout.Token);
+            await RelayResponseAsync(context, requestId, responses, timeout.Token);
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
@@ -106,30 +106,18 @@ public sealed class TunnelRequestDispatcher(
 
     private async Task RelayResponseAsync(
         HttpContext context,
-        string tunnelId,
         string requestId,
         ChannelReader<TunnelClientFrame> responses,
         CancellationToken cancellationToken)
     {
         var responseStarted = false;
-        HttpResponseStart? responseStart = null;
-        MemoryStream? rewriteBuffer = null;
 
         await foreach (var frame in responses.ReadAllAsync(cancellationToken))
         {
             switch (frame.KindCase)
             {
                 case TunnelClientFrame.KindOneofCase.ResponseStart:
-                    responseStart = frame.ResponseStart;
-                    if (TunnelPathRewriter.CanRewrite(responseStart))
-                    {
-                        rewriteBuffer = new MemoryStream();
-                    }
-                    else
-                    {
-                        ApplyResponseStart(context, responseStart);
-                    }
-
+                    ApplyResponseStart(context, frame.ResponseStart);
                     responseStarted = true;
                     break;
 
@@ -140,25 +128,10 @@ public sealed class TunnelRequestDispatcher(
                         responseStarted = true;
                     }
 
-                    if (rewriteBuffer is not null)
-                    {
-                        rewriteBuffer.Write(frame.BodyChunk.Data.Span);
-                    }
-                    else
-                    {
-                        await context.Response.Body.WriteAsync(frame.BodyChunk.Data.Memory, cancellationToken);
-                    }
-
+                    await context.Response.Body.WriteAsync(frame.BodyChunk.Data.Memory, cancellationToken);
                     break;
 
                 case TunnelClientFrame.KindOneofCase.Complete:
-                    if (rewriteBuffer is not null && responseStart is not null)
-                    {
-                        ApplyResponseStart(context, responseStart, rewrittenResponse: true);
-                        var rewritten = TunnelPathRewriter.Rewrite(responseStart, rewriteBuffer.ToArray(), tunnelId);
-                        await context.Response.Body.WriteAsync(rewritten, cancellationToken);
-                    }
-
                     return;
 
                 case TunnelClientFrame.KindOneofCase.Error:
@@ -176,10 +149,7 @@ public sealed class TunnelRequestDispatcher(
         throw new IOException($"Tunnel disconnected before request {requestId} completed.");
     }
 
-    private static void ApplyResponseStart(
-        HttpContext context,
-        HttpResponseStart responseStart,
-        bool rewrittenResponse = false)
+    private static void ApplyResponseStart(HttpContext context, HttpResponseStart responseStart)
     {
         context.Response.StatusCode = responseStart.StatusCode == 0
             ? StatusCodes.Status200OK
@@ -187,24 +157,10 @@ public sealed class TunnelRequestDispatcher(
 
         foreach (var header in responseStart.Headers)
         {
-            if (!TunnelHttp.ShouldForwardResponseHeader(header.Name))
+            if (TunnelHttp.ShouldForwardResponseHeader(header.Name))
             {
-                continue;
+                context.Response.Headers[header.Name] = header.Values.ToArray();
             }
-
-            if (rewrittenResponse && TunnelPathRewriter.ShouldSkipRewrittenResponseHeader(header.Name))
-            {
-                continue;
-            }
-
-            context.Response.Headers[header.Name] = header.Values.ToArray();
-        }
-
-        if (rewrittenResponse)
-        {
-            context.Response.Headers.CacheControl = "no-store";
-            context.Response.Headers.Pragma = "no-cache";
-            context.Response.Headers.Expires = "0";
         }
     }
 }

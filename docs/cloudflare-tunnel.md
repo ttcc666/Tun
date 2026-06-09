@@ -1,24 +1,32 @@
-# Cloudflare Tunnel 方案A
+# Cloudflare Tunnel 方案A - 子域名模式
 
 方案A的目标是只把 `Tun.Server` 的 public HTTP 入口交给 Cloudflare Tunnel：
 
 ```text
 Public user
-  -> https://tun.ttcc0313.ggff.net
+  -> https://demo.ttcc0313.ggff.net
   -> Cloudflare Tunnel / cloudflared
   -> http://127.0.0.1:8080
-  -> Tun.Server
+  -> Tun.Server (subdomain routing)
   -> Tun.Client
   -> local service
 ```
 
 `http://127.0.0.1:8081` 是 Tun.Client 连接 Tun.Server 的 gRPC h2c 入口，不需要暴露给 Cloudflare。
 
+## 子域名路由模式
+
+- 根域名 `https://ttcc0313.ggff.net` - 管理界面和 API
+- 子域名 `https://{tunnelId}.ttcc0313.ggff.net` - tunnel 流量转发
+
+保留子域名（不能用作 tunnelId）：`www`, `api`, `admin`, `dashboard`, `console`, `healthz`, `health`, `status`, `metrics`, `grpc`, `ws`, `websocket`, `cdn`, `static`
+
 ## 代码侧已支持
 
 - `Tun.Server` 默认启用 ASP.NET Core forwarded headers，中间件会在 static files、dashboard、API、tunnel route 之前运行。
-- dashboard 的配置列表会按当前入口生成 tunnel 访问地址；通过 Cloudflare 域名打开 dashboard 时，会显示 `https://tun.ttcc0313.ggff.net/t/{tunnelId}/`。
-- `/api/config/tunnels` 会返回 `publicOrigin` 和 `forwardedHeadersEnabled`，方便验证代理头是否生效。
+- Host 验证中间件会检查请求的 Host header 是否匹配配置的 `BaseDomain` 或其子域名。
+- dashboard 的配置列表会按当前入口生成 tunnel 访问地址；通过 Cloudflare 域名打开 dashboard 时，会显示 `https://{tunnelId}.ttcc0313.ggff.net`。
+- `/api/config/tunnels` 会返回 `publicOrigin`、`baseDomain` 和每个 tunnel 的 `publicUrl`，方便验证。
 
 ## 当前本机配置
 
@@ -26,8 +34,6 @@ Public user
 
 ```text
 Tunnel ID: 94d5f197-0a7c-416f-becd-5fb65ad7bb1a
-Hostname:  tun.ttcc0313.ggff.net
-Origin:    http://127.0.0.1:8080
 Config:    C:\Users\KGMCW\.cloudflared\config.yml
 ```
 
@@ -42,27 +48,36 @@ winget install --exact --id Cloudflare.cloudflared --source winget
 cloudflared tunnel login
 ```
 
-创建 tunnel，并把域名路由到 tunnel：
+如果 tunnel 不存在，创建 tunnel：
 
 ```cmd
 cloudflared tunnel create "tun-server"
-cloudflared tunnel route dns "tun-server" "tun.ttcc0313.ggff.net"
+```
+
+配置 DNS 路由（根域名 + 通配符子域名）：
+
+```cmd
+cloudflared tunnel route dns 94d5f197-0a7c-416f-becd-5fb65ad7bb1a ttcc0313.ggff.net
+cloudflared tunnel route dns 94d5f197-0a7c-416f-becd-5fb65ad7bb1a "*.ttcc0313.ggff.net"
 ```
 
 如果 tunnel 名字已经异常，直接用 tunnel ID 创建 DNS 路由：
 
 ```cmd
-cloudflared tunnel route dns 94d5f197-0a7c-416f-becd-5fb65ad7bb1a tun.ttcc0313.ggff.net
+cloudflared tunnel route dns 94d5f197-0a7c-416f-becd-5fb65ad7bb1a ttcc0313.ggff.net
+cloudflared tunnel route dns 94d5f197-0a7c-416f-becd-5fb65ad7bb1a "*.ttcc0313.ggff.net"
 ```
 
-当前 `C:\Users\KGMCW\.cloudflared\config.yml`：
+更新 `C:\Users\KGMCW\.cloudflared\config.yml`：
 
 ```yaml
 tunnel: 94d5f197-0a7c-416f-becd-5fb65ad7bb1a
 credentials-file: C:\Users\KGMCW\.cloudflared\94d5f197-0a7c-416f-becd-5fb65ad7bb1a.json
 
 ingress:
-  - hostname: tun.ttcc0313.ggff.net
+  - hostname: ttcc0313.ggff.net
+    service: http://127.0.0.1:8080
+  - hostname: "*.ttcc0313.ggff.net"
     service: http://127.0.0.1:8080
   - service: http_status:404
 ```
@@ -75,13 +90,15 @@ cloudflared tunnel ingress validate
 
 ## 启动 Tun
 
-启动 Tun.Server 时把 token 换掉，并限制 forwarded host：
+启动 Tun.Server 时配置 BaseDomain 和 token，并限制 forwarded host：
 
 ```powershell
 cd 'D:\Study\CSharp\Tun'
+$env:Tun__BaseDomain = 'ttcc0313.ggff.net'
 $env:Tun__Token = '<replace-with-strong-token>'
 $env:Tun__ManagementToken = '<replace-with-strong-management-token>'
-$env:Tun__ForwardedHeaders__AllowedHosts__0 = 'tun.ttcc0313.ggff.net'
+$env:Tun__ForwardedHeaders__AllowedHosts__0 = 'ttcc0313.ggff.net'
+$env:Tun__ForwardedHeaders__AllowedHosts__1 = '*.ttcc0313.ggff.net'
 dotnet run --project 'src\Tun.Server\Tun.Server.csproj'
 ```
 
@@ -104,20 +121,20 @@ dotnet run --project 'src\Tun.Client\Tun.Client.csproj'
 ## 验证
 
 ```cmd
-curl https://tun.ttcc0313.ggff.net/healthz
-curl https://tun.ttcc0313.ggff.net/t/demo/health
+curl https://ttcc0313.ggff.net/healthz
+curl https://demo.ttcc0313.ggff.net/health
 ```
 
 dashboard：
 
 ```text
-https://tun.ttcc0313.ggff.net/dashboard/
+https://ttcc0313.ggff.net/dashboard/
 ```
 
 LicenseServer 示例：
 
 ```text
-https://tun.ttcc0313.ggff.net/t/LicenseServer/app/login
+https://LicenseServer.ttcc0313.ggff.net/app/login
 ```
 
 查看当前 tunnel 状态：
@@ -155,7 +172,8 @@ cloudflared tunnel route dns "tun-server" "tun.ttcc0313.ggff.net"
 - 不要把 `dev-token` 暴露到公网。
 - 先只发布 `8080`，不要发布 `8081`。
 - 建议在 Cloudflare Zero Trust 里给 `/dashboard/` 加 Access 保护。
-- 当前 V1 仍然是 path-prefix HTTP tunnel，不支持 WebSocket、SSE、raw TCP。
+- 当前使用子域名路由，不需要路径重写，响应头（ETag、Content-Length）会正常传递，支持浏览器缓存。
+- 保留子域名会在 tunnel 注册和配置时被拒绝，防止冲突。
 
 参考：
 

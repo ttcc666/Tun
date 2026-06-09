@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Options;
-using Tun.Contracts.Http;
 using Tun.Server.Configuration;
 using Tun.Server.Management;
+using Tun.Server.Middleware;
 using Tun.Server.Tunnels;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -45,7 +45,12 @@ if (app.Services.GetRequiredService<IOptions<TunnelServerOptions>>().Value.Forwa
     app.UseForwardedHeaders();
 }
 
-app.UseDefaultFiles();
+app.UseMiddleware<HostValidationMiddleware>();
+
+var defaultFilesOptions = new DefaultFilesOptions();
+defaultFilesOptions.DefaultFileNames.Clear();
+defaultFilesOptions.DefaultFileNames.Add("index.html");
+app.UseDefaultFiles(defaultFilesOptions);
 app.UseStaticFiles();
 
 app.MapHealthChecks("/healthz");
@@ -56,17 +61,27 @@ app.MapGet("/api/tunnels", (TunnelRegistry registry) => Results.Ok(registry.GetS
 
 app.MapGet("/", () => Results.Redirect("/dashboard/"));
 
-app.MapMethods(
-    "/t/{tunnelId}",
-    TunnelHttp.CommonHttpMethods,
-    (HttpContext context, string tunnelId, TunnelRequestDispatcher dispatcher) =>
-        dispatcher.HandleAsync(context, tunnelId, null));
+// Subdomain-based tunnel routing - only handle if it's a subdomain
+app.Use(async (context, next) =>
+{
+    var host = context.Request.Host.Host;
+    var options = context.RequestServices.GetRequiredService<IOptions<TunnelServerOptions>>().Value;
+    var baseDomain = options.BaseDomain;
 
-app.MapMethods(
-    "/t/{tunnelId}/{**path}",
-    TunnelHttp.CommonHttpMethods,
-    (HttpContext context, string tunnelId, string? path, TunnelRequestDispatcher dispatcher) =>
-        dispatcher.HandleAsync(context, tunnelId, path));
+    // If it's a subdomain, handle as tunnel
+    if (host.EndsWith($".{baseDomain}", StringComparison.OrdinalIgnoreCase) &&
+        !string.Equals(host, baseDomain, StringComparison.OrdinalIgnoreCase))
+    {
+        var tunnelId = host[..^(baseDomain.Length + 1)];
+        var path = context.Request.Path.Value?.TrimStart('/');
+        var dispatcher = context.RequestServices.GetRequiredService<TunnelRequestDispatcher>();
+        await dispatcher.HandleAsync(context, tunnelId, path);
+        return;
+    }
+
+    // Otherwise, let other handlers process it
+    await next(context);
+});
 
 app.Run();
 

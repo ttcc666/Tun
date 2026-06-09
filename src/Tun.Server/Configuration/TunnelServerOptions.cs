@@ -10,6 +10,10 @@ public sealed class TunnelServerOptions
 
     public string ConfigPath { get; init; } = "data/tunnels.json";
 
+    public string BaseDomain { get; init; } = "localhost";
+
+    public bool ValidateHostHeader { get; init; } = true;
+
     public TunnelForwardedHeadersOptions ForwardedHeaders { get; init; } = new();
 
     public List<ManagedTunnelConfig> ConfiguredTunnels { get; init; } =
@@ -32,6 +36,13 @@ public sealed class TunnelServerOptions
 
     public string EffectiveManagementToken =>
         string.IsNullOrWhiteSpace(ManagementToken) ? Token : ManagementToken;
+
+    public static readonly HashSet<string> ReservedSubdomains = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "www", "api", "admin", "dashboard", "console",
+        "healthz", "health", "status", "metrics",
+        "grpc", "ws", "websocket", "cdn", "static"
+    };
 }
 
 public sealed class TunnelForwardedHeadersOptions

@@ -1,4 +1,5 @@
 using Tun.Contracts.Grpc;
+using Tun.Server.Configuration;
 
 namespace Tun.Server.Tunnels;
 
@@ -13,6 +14,14 @@ public sealed class TunnelRegistry
             .Where(tunnel => !string.IsNullOrWhiteSpace(tunnel.TunnelId) && !string.IsNullOrWhiteSpace(tunnel.LocalUrl))
             .Select(tunnel => (TunnelId: tunnel.TunnelId.Trim(), LocalUrl: tunnel.LocalUrl.Trim()))
             .ToArray();
+
+        foreach (var tunnel in tunnels)
+        {
+            if (TunnelServerOptions.ReservedSubdomains.Contains(tunnel.TunnelId))
+            {
+                throw new ArgumentException($"TunnelId '{tunnel.TunnelId}' is reserved and cannot be used.");
+            }
+        }
 
         connection.SetTunnels(tunnels);
 

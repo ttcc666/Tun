@@ -32,7 +32,12 @@ dotnet run --project 'src\Tun.Client\Tun.Client.csproj'
 Then call the public HTTP endpoint:
 
 ```powershell
-curl 'http://127.0.0.1:8080/t/demo/health'
+# Using subdomain mode (default)
+$request = @{
+    Uri = 'http://127.0.0.1:8080/health'
+    Headers = @{ Host = 'demo.localhost' }
+}
+Invoke-WebRequest @request
 ```
 
 Open the management dashboard:
@@ -50,6 +55,15 @@ Default ports:
 - Sample local app: `http://localhost:5000`
 
 Server-managed tunnel config is stored at `src/Tun.Server/data/tunnels.json` by default. Change `Tun:Token` and `Tun:ManagementToken` before any non-local deployment.
+
+## Subdomain Mode
+
+Tun uses subdomain-based routing: `{tunnelId}.yourdomain.com` routes to the configured local service.
+
+- Root domain (e.g., `ttcc0313.ggff.net`) hosts the management dashboard and APIs
+- Subdomains (e.g., `demo.ttcc0313.ggff.net`) route to tunnel targets
+
+Reserved subdomain names: `www`, `api`, `admin`, `dashboard`, `console`, `healthz`, `health`, `status`, `metrics`, `grpc`, `ws`, `websocket`, `cdn`, `static`
 
 ## Cloudflare Tunnel
 
