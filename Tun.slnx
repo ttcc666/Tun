@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/Tun.SampleApp/Tun.SampleApp.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Tun.Client/Tun.Client.csproj" />
+    <Project Path="src/Tun.Contracts/Tun.Contracts.csproj" />
+    <Project Path="src/Tun.Server/Tun.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Tun.Tests/Tun.Tests.csproj" />
+  </Folder>
+</Solution>

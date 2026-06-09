@@ -1,0 +1,25 @@
+{
+  "Kestrel": {
+    "Endpoints": {
+      "PublicHttp": {
+        "Url": "http://127.0.0.1:8080",
+        "Protocols": "Http1"
+      },
+      "TunnelGrpc": {
+        "Url": "http://127.0.0.1:8081",
+        "Protocols": "Http2"
+      }
+    }
+  },
+  "Tun": {
+    "ForwardedHeaders": {
+      "Enabled": true,
+      "ForwardHost": true,
+      "ForwardLimit": 1,
+      "AllowedHosts": [
+        "tun.example.com"
+      ]
+    }
+  },
+  "AllowedHosts": "tun.example.com"
+}

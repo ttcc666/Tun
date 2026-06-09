@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+option csharp_namespace = "Tun.Contracts.Grpc";
+
+package tun;
+
+service Tunnel {
+  rpc Connect(stream TunnelClientFrame) returns (stream TunnelServerFrame);
+}
+
+message TunnelClientFrame {
+  string request_id = 1;
+
+  oneof kind {
+    RegisterRequest register = 2;
+    HttpResponseStart response_start = 3;
+    BodyChunk body_chunk = 4;
+    CompleteFrame complete = 5;
+    ErrorFrame error = 6;
+  }
+}
+
+message TunnelServerFrame {
+  string request_id = 1;
+
+  oneof kind {
+    HttpRequestStart request_start = 2;
+    BodyChunk body_chunk = 3;
+    CompleteFrame complete = 4;
+    ErrorFrame error = 5;
+  }
+}
+
+message RegisterRequest {
+  string client_id = 1;
+  string token = 2;
+  repeated TunnelRegistration tunnels = 3;
+}
+
+message TunnelRegistration {
+  string tunnel_id = 1;
+  string local_url = 2;
+}
+
+message HttpRequestStart {
+  string tunnel_id = 1;
+  string method = 2;
+  string path = 3;
+  string query_string = 4;
+  string scheme = 5;
+  repeated Header headers = 6;
+}
+
+message HttpResponseStart {
+  int32 status_code = 1;
+  repeated Header headers = 2;
+}
+
+message Header {
+  string name = 1;
+  repeated string values = 2;
+}
+
+message BodyChunk {
+  bytes data = 1;
+}
+
+message CompleteFrame {
+}
+
+message ErrorFrame {
+  int32 status_code = 1;
+  string message = 2;
+}
