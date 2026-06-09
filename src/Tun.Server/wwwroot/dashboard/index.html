@@ -1,99 +1,14 @@
 <!doctype html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Tun 管理台</title>
-  <link rel="stylesheet" href="/dashboard/styles.css">
-</head>
-<body>
-  <header class="topbar">
-    <div>
-      <h1>Tun 管理台</h1>
-      <p>HTTP tunnel 配置与在线状态</p>
-    </div>
-    <div class="token-panel">
-      <label for="token">管理 Token</label>
-      <div class="token-row">
-        <input id="token" type="password" autocomplete="current-password" placeholder="dev-token">
-        <button id="saveToken" type="button">保存</button>
-      </div>
-    </div>
-  </header>
-
-  <main>
-    <section class="summary-grid" aria-label="状态概览">
-      <div class="metric">
-        <span>配置数</span>
-        <strong id="configuredCount">0</strong>
-      </div>
-      <div class="metric">
-        <span>在线数</span>
-        <strong id="onlineCount">0</strong>
-      </div>
-      <div class="metric">
-        <span>总请求</span>
-        <strong id="requestCount">0</strong>
-      </div>
-      <div class="metric">
-        <span>最后刷新</span>
-        <strong id="lastRefresh">--</strong>
-      </div>
-    </section>
-
-    <section class="layout">
-      <form id="tunnelForm" class="panel">
-        <h2>配置 Tunnel</h2>
-        <div class="form-grid">
-          <label>
-            Tunnel ID
-            <input id="tunnelId" name="tunnelId" required pattern="[A-Za-z0-9_.-]+" placeholder="demo">
-          </label>
-          <input id="clientId" name="clientId" type="hidden" value="dev-client">
-          <label>
-            Local URL
-            <input id="localUrl" name="localUrl" required type="url" placeholder="http://localhost:5000">
-          </label>
-          <label>
-            描述
-            <input id="description" name="description" placeholder="Sample app tunnel">
-          </label>
-        </div>
-        <label class="check-row">
-          <input id="enabled" name="enabled" type="checkbox" checked>
-          启用
-        </label>
-        <div class="actions">
-          <button type="submit">保存配置</button>
-          <button id="resetForm" type="button" class="secondary">清空</button>
-        </div>
-      </form>
-
-      <section class="panel">
-        <div class="section-head">
-          <h2>配置列表</h2>
-          <button id="refresh" type="button" class="secondary">刷新</button>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Tunnel</th>
-                <th>Local URL</th>
-                <th>访问地址</th>
-                <th>状态</th>
-                <th>请求数</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody id="tunnelRows"></tbody>
-          </table>
-        </div>
-      </section>
-    </section>
-  </main>
-
-  <div id="toast" role="status" aria-live="polite"></div>
-  <script src="/dashboard/app.js"></script>
-</body>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/dashboard/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>tun-dashboard</title>
+    <script type="module" crossorigin src="/dashboard/assets/index-BgMc8wcP.js"></script>
+    <link rel="stylesheet" crossorigin href="/dashboard/assets/index-mUHAqzUy.css">
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
 </html>

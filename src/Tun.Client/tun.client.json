@@ -5,15 +5,10 @@
     "ManagementUrl": "http://127.0.0.1:8080",
     "Token": "dev-token",
     "UseServerConfig": true,
-    "RequireServerConfig": false,
+    "RequireServerConfig": true,
     "ChunkSize": 65536,
     "InitialReconnectDelaySeconds": 1,
     "MaxReconnectDelaySeconds": 30,
-    "Tunnels": [
-      {
-        "TunnelId": "demo",
-        "LocalUrl": "http://localhost:5000"
-      }
-    ]
+    "Tunnels": []
   }
 }
