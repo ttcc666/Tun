@@ -67,6 +67,19 @@ public sealed class TunnelConnection
         await _outbound.Writer.WriteAsync(frame, cancellationToken);
     }
 
+    public void SendConfigUpdateNotification()
+    {
+        Touch();
+        var frame = new TunnelServerFrame
+        {
+            ConfigUpdate = new ConfigUpdateNotification
+            {
+                Message = "Configuration updated"
+            }
+        };
+        _outbound.Writer.TryWrite(frame);
+    }
+
     public void Dispatch(TunnelClientFrame frame)
     {
         Touch();

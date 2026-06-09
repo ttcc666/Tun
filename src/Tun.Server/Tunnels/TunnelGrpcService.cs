@@ -2,11 +2,13 @@ using Grpc.Core;
 using Microsoft.Extensions.Options;
 using Tun.Contracts.Grpc;
 using Tun.Server.Configuration;
+using Tun.Server.Management;
 
 namespace Tun.Server.Tunnels;
 
 public sealed class TunnelGrpcService(
     TunnelRegistry registry,
+    ManagedTunnelStore tunnelStore,
     IOptions<TunnelServerOptions> options,
     ILogger<TunnelGrpcService> logger) : Tunnel.TunnelBase
 {
@@ -46,6 +48,18 @@ public sealed class TunnelGrpcService(
             connection.ClientId,
             connection.Tunnels.Count);
 
+        // 订阅配置变更事件
+        void OnConfigChanged(object? sender, ConfigChangedEventArgs e)
+        {
+            if (string.Equals(e.ClientId, connection.ClientId, StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogInformation("Notifying client {ClientId} of config change.", connection.ClientId);
+                connection.SendConfigUpdateNotification();
+            }
+        }
+
+        tunnelStore.ConfigChanged += OnConfigChanged;
+
         var writeTask = WriteOutboundAsync(connection, responseStream, cancellationToken);
 
         try
@@ -61,6 +75,7 @@ public sealed class TunnelGrpcService(
         }
         finally
         {
+            tunnelStore.ConfigChanged -= OnConfigChanged;
             registry.Remove(connection);
             connection.Complete();
 

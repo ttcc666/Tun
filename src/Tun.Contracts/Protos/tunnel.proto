@@ -28,6 +28,7 @@ message TunnelServerFrame {
     BodyChunk body_chunk = 3;
     CompleteFrame complete = 4;
     ErrorFrame error = 5;
+    ConfigUpdateNotification config_update = 6;
   }
 }
 
@@ -71,4 +72,8 @@ message CompleteFrame {
 message ErrorFrame {
   int32 status_code = 1;
   string message = 2;
+}
+
+message ConfigUpdateNotification {
+  string message = 1;
 }

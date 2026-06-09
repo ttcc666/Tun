@@ -75,6 +75,12 @@ public sealed class TunnelClientWorker(
         {
             await foreach (var frame in call.ResponseStream.ReadAllAsync(cancellationToken))
             {
+                if (frame.KindCase == TunnelServerFrame.KindOneofCase.ConfigUpdate)
+                {
+                    logger.LogInformation("Received config update notification. Reconnecting to apply new configuration...");
+                    break; // 退出当前连接，触发重连并重新拉取配置
+                }
+
                 await forwarder.HandleFrameAsync(frame, outbound.Writer, cancellationToken);
             }
         }

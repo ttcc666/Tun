@@ -17,6 +17,8 @@ public sealed class ManagedTunnelStore
     private readonly ILogger<ManagedTunnelStore> _logger;
     private List<ManagedTunnelConfig> _tunnels;
 
+    public event EventHandler<ConfigChangedEventArgs>? ConfigChanged;
+
     public ManagedTunnelStore(
         IOptions<TunnelServerOptions> options,
         IHostEnvironment environment,
@@ -90,6 +92,7 @@ public sealed class ManagedTunnelStore
             }
 
             SaveLocked();
+            NotifyConfigChanged(updated.ClientId);
             return updated;
         }
     }
@@ -98,13 +101,30 @@ public sealed class ManagedTunnelStore
     {
         lock (_gate)
         {
+            var clientId = _tunnels.FirstOrDefault(t => string.Equals(t.TunnelId, tunnelId, StringComparison.OrdinalIgnoreCase))?.ClientId;
             var removed = _tunnels.RemoveAll(tunnel => string.Equals(tunnel.TunnelId, tunnelId, StringComparison.OrdinalIgnoreCase)) > 0;
             if (removed)
             {
                 SaveLocked();
+                if (clientId is not null)
+                {
+                    NotifyConfigChanged(clientId);
+                }
             }
 
             return removed;
+        }
+    }
+
+    private void NotifyConfigChanged(string clientId)
+    {
+        try
+        {
+            ConfigChanged?.Invoke(this, new ConfigChangedEventArgs(clientId));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to notify config change for client {ClientId}.", clientId);
         }
     }
 
@@ -236,4 +256,9 @@ public sealed class ManagedTunnelStore
             throw new ArgumentException("LocalUrl must be an absolute http or https URL.");
         }
     }
+}
+
+public sealed class ConfigChangedEventArgs(string clientId) : EventArgs
+{
+    public string ClientId { get; } = clientId;
 }

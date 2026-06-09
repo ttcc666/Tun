@@ -22,7 +22,11 @@ saveTokenButton.addEventListener("click", () => {
 });
 
 refreshButton.addEventListener("click", load);
-resetFormButton.addEventListener("click", () => form.reset());
+resetFormButton.addEventListener("click", () => {
+  form.reset();
+  document.querySelector("#enabled").checked = true;
+  document.querySelector("#clientId").value = "dev-client"; // 设置默认 ClientId
+});
 form.addEventListener("submit", saveTunnel);
 
 async function api(path, options = {}) {
@@ -81,6 +85,7 @@ async function saveTunnel(event) {
     });
     form.reset();
     document.querySelector("#enabled").checked = true;
+    document.querySelector("#clientId").value = "dev-client"; // 设置默认 ClientId
     showToast("Tunnel 配置已保存");
     await load();
   } catch (error) {
@@ -125,7 +130,6 @@ function render() {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><strong>${escapeHtml(tunnel.tunnelId)}</strong><br><span>${escapeHtml(tunnel.description || "")}</span></td>
-      <td>${escapeHtml(tunnel.clientId)}</td>
       <td>${escapeHtml(tunnel.localUrl)}</td>
       <td><a class="tunnel-link" href="${escapeAttr(buildTunnelUrl(tunnel.tunnelId))}" target="_blank" rel="noreferrer">打开</a></td>
       <td><span class="status ${online ? "online" : "offline"}">${online ? "在线" : tunnel.enabled ? "离线" : "停用"}</span></td>

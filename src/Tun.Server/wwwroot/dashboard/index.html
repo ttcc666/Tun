@@ -49,10 +49,7 @@
             Tunnel ID
             <input id="tunnelId" name="tunnelId" required pattern="[A-Za-z0-9_.-]+" placeholder="demo">
           </label>
-          <label>
-            Client ID
-            <input id="clientId" name="clientId" required placeholder="dev-client">
-          </label>
+          <input id="clientId" name="clientId" type="hidden" value="dev-client">
           <label>
             Local URL
             <input id="localUrl" name="localUrl" required type="url" placeholder="http://localhost:5000">
@@ -82,7 +79,6 @@
             <thead>
               <tr>
                 <th>Tunnel</th>
-                <th>Client</th>
                 <th>Local URL</th>
                 <th>访问地址</th>
                 <th>状态</th>

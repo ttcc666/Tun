@@ -56,6 +56,16 @@ public sealed class TunnelRegistry
         }
     }
 
+    public TunnelConnection? GetConnectionByClientId(string clientId)
+    {
+        lock (_gate)
+        {
+            return _tunnels.Values
+                .FirstOrDefault(tunnel => string.Equals(tunnel.Connection.ClientId, clientId, StringComparison.OrdinalIgnoreCase))
+                ?.Connection;
+        }
+    }
+
     public IReadOnlyList<TunnelStatus> GetStatuses()
     {
         lock (_gate)
