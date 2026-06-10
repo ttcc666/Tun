@@ -4,6 +4,8 @@ using Tun.Server.Domain.Configuration;
 using Tun.Server.Infrastructure.HealthChecks;
 using Tun.Server.Infrastructure.Persistence.Repositories;
 using Tun.Server.Domain.Repositories;
+using Tun.Server.Domain.Services;
+using Tun.Server.Infrastructure.Services;
 
 namespace Tun.Server.Infrastructure.Extensions;
 
@@ -42,6 +44,8 @@ public static class DependencyInjection
         {
             services.AddScoped<ITunnelRepository, JsonTunnelRepository>();
         }
+
+        services.AddScoped<ICredentialService, CredentialService>();
 
         services.AddHealthChecks()
             .AddCheck<DatabaseHealthCheck>("database")

@@ -14,10 +14,15 @@ export interface TunnelOnlineStatus {
   requestCount: number
 }
 
-export interface ApiResponse {
+export interface UnifiedApiResponse<T> {
+  code: number
+  message: string
+  data: T | null
+}
+
+export interface TunnelsData {
   publicOrigin: string
   baseDomain: string
-  forwardedHeadersEnabled: boolean
   configured: TunnelConfig[]
   online: TunnelOnlineStatus[]
 }
@@ -28,4 +33,17 @@ export interface UpsertTunnelRequest {
   localUrl: string
   enabled: boolean
   description: string
+}
+
+export interface AuthStatusResponse {
+  isInitialized: boolean
+  isAuthenticated: boolean
+}
+
+export interface LoginRequest {
+  password: string
+}
+
+export interface SetupRequest {
+  password: string
 }

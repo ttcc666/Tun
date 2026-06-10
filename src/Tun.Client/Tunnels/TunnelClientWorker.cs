@@ -50,7 +50,8 @@ public sealed class TunnelClientWorker(
         ValidateOptions();
         AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
         var tunnels = await ResolveTunnelsAsync(cancellationToken);
-        forwarder.SetTunnels(tunnels);
+        var healthyTunnels = await FilterHealthyTunnelsAsync(tunnels, cancellationToken);
+        forwarder.SetTunnels(healthyTunnels);
 
         using var channel = GrpcChannel.ForAddress(options.Value.ServerUrl);
         var client = new Tunnel.TunnelClient(channel);
@@ -64,12 +65,12 @@ public sealed class TunnelClientWorker(
 
         var writeTask = WriteOutboundAsync(call.RequestStream, outbound.Reader, cancellationToken);
 
-        await outbound.Writer.WriteAsync(CreateRegisterFrame(tunnels), cancellationToken);
+        await outbound.Writer.WriteAsync(CreateRegisterFrame(healthyTunnels), cancellationToken);
         logger.LogInformation(
             "Connected to tunnel server {ServerUrl} as {ClientId} with {TunnelCount} tunnel(s).",
             options.Value.ServerUrl,
             options.Value.ClientId,
-            tunnels.Count);
+            healthyTunnels.Count);
 
         try
         {
@@ -89,6 +90,42 @@ public sealed class TunnelClientWorker(
             forwarder.AbortAll(new IOException("Tunnel connection closed."));
             outbound.Writer.TryComplete();
             await writeTask;
+        }
+    }
+
+    private async Task<IReadOnlyList<TunnelClientRegistration>> FilterHealthyTunnelsAsync(
+        IReadOnlyList<TunnelClientRegistration> tunnels,
+        CancellationToken cancellationToken)
+    {
+        var healthy = new List<TunnelClientRegistration>();
+
+        foreach (var tunnel in tunnels)
+        {
+            if (await IsLocalUrlHealthyAsync(tunnel.LocalUrl, cancellationToken))
+            {
+                healthy.Add(tunnel);
+                logger.LogInformation("Tunnel {TunnelId} -> {LocalUrl} is healthy.", tunnel.TunnelId, tunnel.LocalUrl);
+            }
+            else
+            {
+                logger.LogWarning("Tunnel {TunnelId} -> {LocalUrl} is not accessible, skipping.", tunnel.TunnelId, tunnel.LocalUrl);
+            }
+        }
+
+        return healthy;
+    }
+
+    private static async Task<bool> IsLocalUrlHealthyAsync(string localUrl, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+            var response = await httpClient.GetAsync(localUrl, cancellationToken);
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -123,18 +160,30 @@ public sealed class TunnelClientWorker(
             using var httpClient = new HttpClient { BaseAddress = new Uri(options.Value.ManagementUrl, UriKind.Absolute) };
             httpClient.DefaultRequestHeaders.Add("X-Tun-Token", options.Value.Token);
 
-            var response = await httpClient.GetFromJsonAsync<ClientTunnelConfigResponse>(
+            var apiResponse = await httpClient.GetFromJsonAsync<UnifiedApiResponse<ClientTunnelConfigResponse>>(
                 $"/api/client-config/{Uri.EscapeDataString(options.Value.ClientId)}",
                 cancellationToken);
 
-            var managedTunnels = response?.Tunnels
+            if (apiResponse?.Code != 200 || apiResponse.Data == null)
+            {
+                logger.LogWarning("Failed to load server config: {Message}", apiResponse?.Message ?? "Unknown error");
+                if (options.Value.RequireServerConfig)
+                {
+                    throw new InvalidOperationException($"Failed to load server config: {apiResponse?.Message ?? "Unknown error"}");
+                }
+                return options.Value.Tunnels;
+            }
+
+            var response = apiResponse.Data;
+
+            var managedTunnels = response.Tunnels
                 .Select(tunnel => new TunnelClientRegistration
                 {
                     TunnelId = tunnel.TunnelId,
                     LocalUrl = tunnel.LocalUrl
                 })
                 .Where(tunnel => !string.IsNullOrWhiteSpace(tunnel.TunnelId) && !string.IsNullOrWhiteSpace(tunnel.LocalUrl))
-                .ToArray() ?? [];
+                .ToArray();
 
             if (managedTunnels.Length > 0 || options.Value.RequireServerConfig)
             {

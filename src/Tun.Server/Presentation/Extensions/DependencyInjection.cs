@@ -8,6 +8,15 @@ public static class DependencyInjection
     {
         services.AddGrpc();
 
+        services.AddDistributedMemoryCache();
+        services.AddSession(options =>
+        {
+            options.IdleTimeout = TimeSpan.FromDays(7);
+            options.Cookie.HttpOnly = true;
+            options.Cookie.IsEssential = true;
+            options.Cookie.SameSite = SameSiteMode.Lax;
+        });
+
         services.AddOptions<ServerOptions>()
             .Bind(configuration.GetSection("Tun:Server"))
             .ValidateDataAnnotations()

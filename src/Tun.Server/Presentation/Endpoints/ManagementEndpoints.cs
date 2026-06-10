@@ -27,12 +27,12 @@ public static class ManagementEndpoints
         TunnelRegistry registry,
         IOptions<ServerOptions> options)
     {
-        if (!IsAuthorized(context, options.Value.ManagementToken))
-            return Results.Unauthorized();
+        if (!await IsAuthorizedAsync(context, options.Value.ManagementToken))
+            return Results.Ok(ApiResponse<object?>.Error(401, "未认证"));
 
         var result = await service.GetAllAsync();
         if (!result.IsSuccess)
-            return Results.BadRequest(new { error = result.Error });
+            return Results.Ok(ApiResponse<object?>.Error(400, result.Error));
 
         var publicOrigin = GetPublicOrigin(context);
         var baseDomain = options.Value.BaseDomain;
@@ -50,13 +50,15 @@ public static class ManagementEndpoints
             publicUrl = $"{scheme}://{t.TunnelId}.{baseDomain}"
         }).ToArray();
 
-        return Results.Ok(new
+        var data = new
         {
             publicOrigin,
             baseDomain,
             configured,
             online = registry.GetStatuses()
-        });
+        };
+
+        return Results.Ok(ApiResponse<object>.Success(data));
     }
 
     private static async Task<IResult> UpsertTunnel(
@@ -65,13 +67,13 @@ public static class ManagementEndpoints
         ITunnelManagementService service,
         IOptions<ServerOptions> options)
     {
-        if (!IsAuthorized(context, options.Value.ManagementToken))
-            return Results.Unauthorized();
+        if (!await IsAuthorizedAsync(context, options.Value.ManagementToken))
+            return Results.Ok(ApiResponse<object?>.Error(401, "未认证"));
 
         var result = await service.UpsertAsync(request);
         return result.IsSuccess
-            ? Results.Ok()
-            : Results.BadRequest(new { error = result.Error });
+            ? Results.Ok(ApiResponse<object?>.Success(message: "操作成功"))
+            : Results.Ok(ApiResponse<object?>.Error(400, result.Error));
     }
 
     private static async Task<IResult> DeleteTunnel(
@@ -80,13 +82,13 @@ public static class ManagementEndpoints
         ITunnelManagementService service,
         IOptions<ServerOptions> options)
     {
-        if (!IsAuthorized(context, options.Value.ManagementToken))
-            return Results.Unauthorized();
+        if (!await IsAuthorizedAsync(context, options.Value.ManagementToken))
+            return Results.Ok(ApiResponse<object?>.Error(401, "未认证"));
 
         var result = await service.DeleteAsync(tunnelId);
         return result.IsSuccess
-            ? Results.NoContent()
-            : Results.BadRequest(new { error = result.Error });
+            ? Results.Ok(ApiResponse<object?>.Success(message: "删除成功"))
+            : Results.Ok(ApiResponse<object?>.Error(400, result.Error));
     }
 
     private static async Task<IResult> GetClientConfig(
@@ -95,23 +97,29 @@ public static class ManagementEndpoints
         ITunnelManagementService service,
         IOptions<ServerOptions> options)
     {
-        if (!IsAuthorized(context, options.Value.Token))
-            return Results.Unauthorized();
+        if (!await IsAuthorizedAsync(context, options.Value.Token))
+            return Results.Ok(ApiResponse<object?>.Error(401, "未认证"));
 
         var result = await service.GetAllAsync();
         if (!result.IsSuccess)
-            return Results.BadRequest(new { error = result.Error });
+            return Results.Ok(ApiResponse<object?>.Error(400, result.Error));
 
         var clientTunnels = result.Value!
             .Where(t => t.ClientId == clientId && t.Enabled)
-            .Select(t => new { t.TunnelId, t.LocalUrl })
+            .Select(t => new { tunnelId = t.TunnelId, localUrl = t.LocalUrl })
             .ToArray();
 
-        return Results.Ok(new { Tunnels = clientTunnels });
+        return Results.Ok(ApiResponse<object>.Success(new { tunnels = clientTunnels }));
     }
 
-    private static bool IsAuthorized(HttpContext context, string expectedToken)
+    private static async Task<bool> IsAuthorizedAsync(HttpContext context, string expectedToken)
     {
+        // Check session authentication
+        await context.Session.LoadAsync();
+        if (context.Session.GetString("IsAuthenticated") == "true")
+            return true;
+
+        // Check token authentication
         if (string.IsNullOrWhiteSpace(expectedToken))
             return true;
 

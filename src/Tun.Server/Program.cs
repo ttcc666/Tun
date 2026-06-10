@@ -23,6 +23,11 @@ var fwdOptions = app.Services.GetRequiredService<IOptions<Tun.Server.Domain.Conf
 if (fwdOptions.Enabled)
     app.UseForwardedHeaders();
 
+app.UseMiddleware<GlobalExceptionMiddleware>();
+
+app.UseSession();
+
+app.UseMiddleware<InitializationMiddleware>();
 app.UseMiddleware<HostValidationMiddleware>();
 
 var defaultFilesOptions = new DefaultFilesOptions();
@@ -33,6 +38,7 @@ app.UseStaticFiles();
 
 app.MapHealthChecks("/healthz");
 app.MapGrpcService<TunnelGrpcService>();
+app.MapAuthEndpoints();
 app.MapManagementEndpoints();
 
 app.MapGet("/api/tunnels", (TunnelRegistry registry) => Results.Ok(registry.GetStatuses()));
