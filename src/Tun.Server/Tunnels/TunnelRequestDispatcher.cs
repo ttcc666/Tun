@@ -4,13 +4,13 @@ using Microsoft.Extensions.Options;
 using System.Threading.Channels;
 using Tun.Contracts.Grpc;
 using Tun.Contracts.Http;
-using Tun.Server.Configuration;
+using Tun.Server.Domain.Configuration;
 
 namespace Tun.Server.Tunnels;
 
 public sealed class TunnelRequestDispatcher(
     TunnelRegistry registry,
-    IOptions<TunnelServerOptions> options,
+    IOptions<TunnelOptions> options,
     ILogger<TunnelRequestDispatcher> logger)
 {
     public async Task HandleAsync(HttpContext context, string tunnelId, string? path)

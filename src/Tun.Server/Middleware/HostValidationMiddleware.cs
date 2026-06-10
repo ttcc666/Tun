@@ -1,24 +1,22 @@
 using Microsoft.Extensions.Options;
-using Tun.Server.Configuration;
+using Tun.Server.Domain.Configuration;
 
 namespace Tun.Server.Middleware;
 
 public sealed class HostValidationMiddleware
 {
     private readonly RequestDelegate _next;
-    private readonly TunnelServerOptions _options;
-    private readonly IHostEnvironment _environment;
+    private readonly ServerOptions _options;
+    private readonly bool _validateHostHeader = true;
     private readonly ILogger<HostValidationMiddleware> _logger;
 
     public HostValidationMiddleware(
         RequestDelegate next,
-        IOptions<TunnelServerOptions> options,
-        IHostEnvironment environment,
+        IOptions<ServerOptions> options,
         ILogger<HostValidationMiddleware> logger)
     {
         _next = next;
         _options = options.Value;
-        _environment = environment;
         _logger = logger;
     }
 
@@ -39,12 +37,12 @@ public sealed class HostValidationMiddleware
 
     private bool IsValidHost(string host)
     {
-        if (!_options.ValidateHostHeader || _environment.IsDevelopment())
+        if (!_validateHostHeader)
         {
             return true;
         }
 
-        // Allow localhost and loopback addresses in development
+        // Allow localhost and loopback addresses
         if (IsLocalhostOrLoopback(host))
         {
             return true;

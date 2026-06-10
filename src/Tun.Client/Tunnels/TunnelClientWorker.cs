@@ -136,14 +136,9 @@ public sealed class TunnelClientWorker(
                 .Where(tunnel => !string.IsNullOrWhiteSpace(tunnel.TunnelId) && !string.IsNullOrWhiteSpace(tunnel.LocalUrl))
                 .ToArray() ?? [];
 
-            if (managedTunnels.Length > 0)
+            if (managedTunnels.Length > 0 || options.Value.RequireServerConfig)
             {
                 return managedTunnels;
-            }
-
-            if (options.Value.RequireServerConfig)
-            {
-                throw new InvalidOperationException($"No enabled tunnels are configured for client '{options.Value.ClientId}'.");
             }
 
             logger.LogWarning("No server-managed tunnels found for {ClientId}. Falling back to local client config.", options.Value.ClientId);
@@ -190,7 +185,7 @@ public sealed class TunnelClientWorker(
             throw new InvalidOperationException("Tun:Token is required.");
         }
 
-        if (options.Value.Tunnels.Count == 0)
+        if (!options.Value.UseServerConfig && options.Value.Tunnels.Count == 0)
         {
             throw new InvalidOperationException("At least one Tun:Tunnels entry is required.");
         }
