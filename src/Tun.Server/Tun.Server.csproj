@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" Version="2.80.0" />
+    <PackageReference Include="Npgsql" Version="9.0.2" />
+    <PackageReference Include="SqlSugarCore" Version="5.1.4.176" />
   </ItemGroup>
 
   <ItemGroup>

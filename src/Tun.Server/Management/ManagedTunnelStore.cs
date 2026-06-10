@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using System.Text.Json;
 using Tun.Contracts.Management;
 using Tun.Server.Configuration;
+using Tun.Server.Data;
 
 namespace Tun.Server.Management;
 
@@ -15,6 +16,8 @@ public sealed class ManagedTunnelStore
     private readonly object _gate = new();
     private readonly string _path;
     private readonly ILogger<ManagedTunnelStore> _logger;
+    private readonly IServiceProvider _serviceProvider;
+    private readonly bool _useDatabaseStorage;
     private List<ManagedTunnelConfig> _tunnels;
 
     public event EventHandler<ConfigChangedEventArgs>? ConfigChanged;
@@ -22,17 +25,41 @@ public sealed class ManagedTunnelStore
     public ManagedTunnelStore(
         IOptions<TunnelServerOptions> options,
         IHostEnvironment environment,
-        ILogger<ManagedTunnelStore> logger)
+        ILogger<ManagedTunnelStore> logger,
+        IServiceProvider serviceProvider)
     {
         _logger = logger;
+        _serviceProvider = serviceProvider;
+        _useDatabaseStorage = options.Value.Database.Enabled;
         _path = Path.IsPathRooted(options.Value.ConfigPath)
             ? options.Value.ConfigPath
             : Path.Combine(environment.ContentRootPath, options.Value.ConfigPath);
-        _tunnels = LoadOrSeed(options.Value.ConfiguredTunnels);
+
+        if (_useDatabaseStorage)
+        {
+            _logger.LogInformation("Using PostgreSQL database storage.");
+            // 初始化数据库表结构
+            using var scope = _serviceProvider.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<TunnelRepository>();
+            repository.InitializeAsync().GetAwaiter().GetResult();
+            _tunnels = new List<ManagedTunnelConfig>();
+        }
+        else
+        {
+            _logger.LogInformation("Using JSON file storage: {Path}", _path);
+            _tunnels = LoadOrSeed(options.Value.ConfiguredTunnels);
+        }
     }
 
     public IReadOnlyList<ManagedTunnelConfig> GetAll()
     {
+        if (_useDatabaseStorage)
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<TunnelRepository>();
+            return repository.GetAllAsync().GetAwaiter().GetResult();
+        }
+
         lock (_gate)
         {
             return _tunnels
@@ -44,6 +71,13 @@ public sealed class ManagedTunnelStore
 
     public IReadOnlyList<ManagedTunnelConfig> GetEnabledForClient(string clientId)
     {
+        if (_useDatabaseStorage)
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<TunnelRepository>();
+            return repository.GetEnabledByClientAsync(clientId).GetAwaiter().GetResult();
+        }
+
         lock (_gate)
         {
             return _tunnels
@@ -55,6 +89,14 @@ public sealed class ManagedTunnelStore
 
     public bool TryGet(string tunnelId, out ManagedTunnelConfig tunnel)
     {
+        if (_useDatabaseStorage)
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<TunnelRepository>();
+            tunnel = repository.GetByIdAsync(tunnelId).GetAwaiter().GetResult()!;
+            return tunnel is not null;
+        }
+
         lock (_gate)
         {
             tunnel = _tunnels.FirstOrDefault(item => string.Equals(item.TunnelId, tunnelId, StringComparison.OrdinalIgnoreCase))!;
@@ -66,21 +108,32 @@ public sealed class ManagedTunnelStore
     {
         Validate(request);
 
+        var now = DateTimeOffset.UtcNow;
+        var updated = new ManagedTunnelConfig
+        {
+            TunnelId = request.TunnelId.Trim(),
+            ClientId = request.ClientId.Trim(),
+            LocalUrl = request.LocalUrl.Trim(),
+            Enabled = request.Enabled,
+            Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        if (_useDatabaseStorage)
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<TunnelRepository>();
+            var result = repository.UpsertAsync(updated).GetAwaiter().GetResult();
+            NotifyConfigChanged(result.ClientId);
+            return result;
+        }
+
         lock (_gate)
         {
-            var now = DateTimeOffset.UtcNow;
             var index = _tunnels.FindIndex(tunnel => string.Equals(tunnel.TunnelId, request.TunnelId, StringComparison.OrdinalIgnoreCase));
             var createdAt = index >= 0 ? _tunnels[index].CreatedAt : now;
-            var updated = new ManagedTunnelConfig
-            {
-                TunnelId = request.TunnelId.Trim(),
-                ClientId = request.ClientId.Trim(),
-                LocalUrl = request.LocalUrl.Trim(),
-                Enabled = request.Enabled,
-                Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
-                CreatedAt = createdAt,
-                UpdatedAt = now
-            };
+            updated = updated with { CreatedAt = createdAt };
 
             if (index >= 0)
             {
@@ -99,6 +152,19 @@ public sealed class ManagedTunnelStore
 
     public bool Delete(string tunnelId)
     {
+        if (_useDatabaseStorage)
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<TunnelRepository>();
+            var existing = repository.GetByIdAsync(tunnelId).GetAwaiter().GetResult();
+            var removed = repository.DeleteAsync(tunnelId).GetAwaiter().GetResult();
+            if (removed && existing != null)
+            {
+                NotifyConfigChanged(existing.ClientId);
+            }
+            return removed;
+        }
+
         lock (_gate)
         {
             var clientId = _tunnels.FirstOrDefault(t => string.Equals(t.TunnelId, tunnelId, StringComparison.OrdinalIgnoreCase))?.ClientId;

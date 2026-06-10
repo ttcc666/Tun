@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Options;
+using SqlSugar;
 using Tun.Server.Configuration;
+using Tun.Server.Data;
 using Tun.Server.Management;
 using Tun.Server.Middleware;
 using Tun.Server.Tunnels;
@@ -33,6 +35,35 @@ if (tunOptions.ForwardedHeaders.Enabled)
 }
 
 builder.Services.AddGrpc();
+
+// 注册 SqlSugar（仅在启用数据库时）
+if (tunOptions.Database.Enabled)
+{
+    builder.Services.AddScoped<ISqlSugarClient>(sp =>
+    {
+        var db = new SqlSugarClient(new ConnectionConfig
+        {
+            ConnectionString = tunOptions.Database.ConnectionString,
+            DbType = DbType.PostgreSQL,
+            IsAutoCloseConnection = true,
+            InitKeyType = InitKeyType.Attribute
+        });
+
+        // 开发环境下打印 SQL
+        if (builder.Environment.IsDevelopment())
+        {
+            db.Aop.OnLogExecuting = (sql, pars) =>
+            {
+                Console.WriteLine($"[SQL] {sql}");
+            };
+        }
+
+        return db;
+    });
+    builder.Services.AddScoped<TunnelRepository>();
+    builder.Services.AddScoped<DataMigrationService>();
+}
+
 builder.Services.AddSingleton<ManagedTunnelStore>();
 builder.Services.AddSingleton<TunnelRegistry>();
 builder.Services.AddSingleton<TunnelRequestDispatcher>();
@@ -56,6 +87,12 @@ app.UseStaticFiles();
 app.MapHealthChecks("/healthz");
 app.MapGrpcService<TunnelGrpcService>();
 app.MapManagementEndpoints();
+
+// 数据库模式下才注册迁移端点
+if (tunOptions.Database.Enabled)
+{
+    app.MapMigrationEndpoints();
+}
 
 app.MapGet("/api/tunnels", (TunnelRegistry registry) => Results.Ok(registry.GetStatuses()));
 

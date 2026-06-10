@@ -10,6 +10,8 @@ public sealed class TunnelServerOptions
 
     public string ConfigPath { get; init; } = "data/tunnels.json";
 
+    public DatabaseOptions Database { get; init; } = new();
+
     public string BaseDomain { get; init; } = "localhost";
 
     public bool ValidateHostHeader { get; init; } = true;
@@ -54,4 +56,17 @@ public sealed class TunnelForwardedHeadersOptions
     public int ForwardLimit { get; init; } = 1;
 
     public List<string> AllowedHosts { get; init; } = [];
+}
+
+public sealed class DatabaseOptions
+{
+    /// <summary>
+    /// 是否启用数据库存储（false 则使用 JSON 文件）
+    /// </summary>
+    public bool Enabled { get; init; } = false;
+
+    /// <summary>
+    /// PostgreSQL 连接字符串
+    /// </summary>
+    public string ConnectionString { get; init; } = "Host=localhost;Port=5432;Database=tun;Username=postgres;Password=postgres";
 }
